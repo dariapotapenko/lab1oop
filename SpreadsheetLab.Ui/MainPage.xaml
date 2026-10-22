@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="SpreadsheetLab.Ui.MainPage"
+             Title="Електронні таблиці"
+             BackgroundColor="#F5F6F8">
+
+    <ContentPage.Resources>
+        <Style x:Key="ToolbarButton" TargetType="Button">
+            <Setter Property="BackgroundColor" Value="#E7ECF3" />
+            <Setter Property="TextColor" Value="#1D3557" />
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="HeightRequest" Value="40" />
+            <Setter Property="Padding" Value="14,0" />
+            <Setter Property="FontSize" Value="14" />
+        </Style>
+        <Style x:Key="PrimaryButton" TargetType="Button" BasedOn="{StaticResource ToolbarButton}">
+            <Setter Property="BackgroundColor" Value="#2F6FED" />
+            <Setter Property="TextColor" Value="White" />
+        </Style>
+        <Style x:Key="SectionLabel" TargetType="Label">
+            <Setter Property="TextColor" Value="#5E6C84" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="FontAttributes" Value="Bold" />
+            <Setter Property="VerticalTextAlignment" Value="Center" />
+        </Style>
+    </ContentPage.Resources>
+
+    <Grid Padding="16" RowDefinitions="Auto,Auto,Auto,*,Auto" RowSpacing="10">
+        <Grid Grid.Row="0" ColumnDefinitions="*,Auto">
+            <VerticalStackLayout Spacing="2">
+                <Label Text="Електронні таблиці" FontSize="24" FontAttributes="Bold" TextColor="#172B4D" />
+                <Label Text="Лабораторна робота №1 · варіант 80" FontSize="13" TextColor="#5E6C84" />
+            </VerticalStackLayout>
+            <HorizontalStackLayout Grid.Column="1" Spacing="8" VerticalOptions="Center">
+                <Label x:Name="ModeLabel" Text="Режим: ВИРАЗИ" TextColor="#344563" VerticalTextAlignment="Center" />
+                <Switch x:Name="ModeSwitch" Toggled="ModeSwitch_Toggled" OnColor="#2F6FED" />
+            </HorizontalStackLayout>
+        </Grid>
+
+        <Border Grid.Row="1" BackgroundColor="White" Stroke="#D9E0EA" StrokeThickness="1" Padding="10">
+            <ScrollView Orientation="Horizontal">
+                <HorizontalStackLayout Spacing="8">
+                    <Button Text="Обчислити" Style="{StaticResource PrimaryButton}" Clicked="CalculateButton_Clicked" />
+                    <Button Text="Нова таблиця" Style="{StaticResource ToolbarButton}" Clicked="NewButton_Clicked" />
+                    <Button Text="Зберегти" Style="{StaticResource ToolbarButton}" Clicked="SaveButton_Clicked" />
+                    <Button Text="Відкрити" Style="{StaticResource ToolbarButton}" Clicked="OpenButton_Clicked" />
+                    <Button Text="Довідка" Style="{StaticResource ToolbarButton}" Clicked="HelpButton_Clicked" />
+                    <Button Text="Про програму" Style="{StaticResource ToolbarButton}" Clicked="AboutButton_Clicked" />
+                    <Button Text="Вийти" Style="{StaticResource ToolbarButton}" Clicked="ExitButton_Clicked" />
+                </HorizontalStackLayout>
+            </ScrollView>
+        </Border>
+
+        <Grid Grid.Row="2" RowDefinitions="Auto,Auto" RowSpacing="8">
+            <Grid ColumnDefinitions="Auto,90,*,Auto" ColumnSpacing="8">
+                <Label Text="АКТИВНА КЛІТИНКА" Style="{StaticResource SectionLabel}" />
+                <Border Grid.Column="1" BackgroundColor="#EDF3FF" Stroke="#A9C2F5" Padding="8,4">
+                    <Label x:Name="ActiveCellLabel" Text="A1" TextColor="#1D55B3" HorizontalTextAlignment="Center" />
+                </Border>
+                <Entry x:Name="FormulaEntry"
+                       Grid.Column="2"
+                       Placeholder="Введіть число, посилання або вираз"
+                       BackgroundColor="White"
+                       TextColor="#172B4D"
+                       Completed="FormulaEntry_Completed" />
+                <Button Grid.Column="3" Text="Ввести" Style="{StaticResource PrimaryButton}" Clicked="ApplyFormulaButton_Clicked" />
+            </Grid>
+
+            <ScrollView Grid.Row="1" Orientation="Horizontal">
+                <HorizontalStackLayout Spacing="8">
+                    <Label Text="СТРУКТУРА" Style="{StaticResource SectionLabel}" Margin="0,0,6,0" />
+                    <Button Text="− Рядок" Style="{StaticResource ToolbarButton}" Clicked="RemoveRowButton_Clicked" />
+                    <Button Text="+ Рядок" Style="{StaticResource ToolbarButton}" Clicked="AddRowButton_Clicked" />
+                    <Button Text="− Стовпчик" Style="{StaticResource ToolbarButton}" Clicked="RemoveColumnButton_Clicked" />
+                    <Button Text="+ Стовпчик" Style="{StaticResource ToolbarButton}" Clicked="AddColumnButton_Clicked" />
+                </HorizontalStackLayout>
+            </ScrollView>
+        </Grid>
+
+        <Border Grid.Row="3" BackgroundColor="White" Stroke="#CAD3E0" StrokeThickness="1">
+            <ScrollView Orientation="Both">
+                <Grid x:Name="SpreadsheetGrid" />
+            </ScrollView>
+        </Border>
+
+        <Label x:Name="StatusLabel" Grid.Row="4" Text="Готово" FontSize="12" TextColor="#5E6C84" />
+    </Grid>
+</ContentPage>
