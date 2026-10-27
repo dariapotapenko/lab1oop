@@ -1,4 +1,3 @@
-using Antlr4.Runtime;
 using SpreadsheetLab.Ui.Parsing;
 using System.Numerics;
 using System.Text.Json;
@@ -11,13 +10,17 @@ public partial class MainPage : ContentPage
     private const double CellHeight = 40;
     private const double HeaderWidth = 40;
     private const double HeaderHeight = 35;
+    private const int DefaultRowCount = 12;
+    private const int DefaultColumnCount = 8;
+    private const int MaximumRowCount = 100;
+    private const int MaximumColumnCount = 26;
 
     private readonly Dictionary<string, string> cells = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, Entry> cellEntries = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, object> calculatedValues = new(StringComparer.OrdinalIgnoreCase);
 
-    private int rowCount = 12;
-    private int columnCount = 8;
+    private int rowCount = DefaultRowCount;
+    private int columnCount = DefaultColumnCount;
     private string activeCell = "A1";
 
     public MainPage()
@@ -28,6 +31,12 @@ public partial class MainPage : ContentPage
 
     private void CreateGrid()
     {
+        foreach (Entry entry in cellEntries.Values)
+        {
+            entry.Focused -= CellEntry_Focused;
+            entry.Unfocused -= CellEntry_Unfocused;
+        }
+
         SpreadsheetGrid.Children.Clear();
         SpreadsheetGrid.RowDefinitions.Clear();
         SpreadsheetGrid.ColumnDefinitions.Clear();
@@ -81,6 +90,7 @@ public partial class MainPage : ContentPage
         }
 
         SelectCell(activeCell);
+        UpdateStructureButtons();
     }
 
     private void AddHeader(string text, int column, int row)
@@ -141,6 +151,12 @@ public partial class MainPage : ContentPage
     private void StoreCell(string address, string? value)
     {
         string text = value?.Trim() ?? string.Empty;
+        string currentText = cells.GetValueOrDefault(address, string.Empty);
+        if (string.Equals(currentText, text, StringComparison.Ordinal))
+        {
+            return;
+        }
+
         if (text.Length == 0)
         {
             cells.Remove(address);
@@ -187,8 +203,8 @@ public partial class MainPage : ContentPage
         ModeSwitch.IsToggled = false;
         cells.Clear();
         calculatedValues.Clear();
-        rowCount = 12;
-        columnCount = 8;
+        rowCount = DefaultRowCount;
+        columnCount = DefaultColumnCount;
         activeCell = "A1";
         CreateGrid();
         StatusLabel.Text = "Створено нову таблицю";
@@ -199,7 +215,10 @@ public partial class MainPage : ContentPage
         try
         {
             SaveVisibleEntries();
-            var data = new SheetData(rowCount, columnCount, cells);
+            var data = new SheetData(
+                rowCount,
+                columnCount,
+                new Dictionary<string, string>(cells, StringComparer.OrdinalIgnoreCase));
             string json = JsonSerializer.Serialize(data, new JsonSerializerOptions { WriteIndented = true });
             await File.WriteAllTextAsync(GetSavePath(), json);
             StatusLabel.Text = "Таблицю збережено";
@@ -224,19 +243,23 @@ public partial class MainPage : ContentPage
         {
             string json = await File.ReadAllTextAsync(path);
             SheetData? data = JsonSerializer.Deserialize<SheetData>(json);
-            if (data is null)
+            if (data is null || data.Cells is null)
             {
                 throw new JsonException();
             }
 
             ModeSwitch.IsToggled = false;
-            rowCount = Math.Max(1, data.Rows);
-            columnCount = Math.Max(1, data.Columns);
+            rowCount = Math.Clamp(data.Rows, 1, MaximumRowCount);
+            columnCount = Math.Clamp(data.Columns, 1, MaximumColumnCount);
             cells.Clear();
             calculatedValues.Clear();
             foreach (var item in data.Cells)
             {
-                cells[item.Key] = item.Value;
+                string address = item.Key.ToUpperInvariant();
+                if (IsAddressVisible(address) && !string.IsNullOrWhiteSpace(item.Value))
+                {
+                    cells[address] = item.Value.Trim();
+                }
             }
 
             activeCell = "A1";
@@ -271,7 +294,9 @@ public partial class MainPage : ContentPage
         await DisplayAlert(
             "Довідка",
             "Підтримувані функції та оператори: mmax, mmin, =, <, >, not, and, or, eqv. " +
-            "Вираз може містити цілі числа, круглі дужки та посилання на клітинки.",
+            "Вираз може містити цілі числа, круглі дужки та посилання на клітинки. " +
+            "Оберіть клітинку, введіть вираз і натисніть «Ввести». Кнопка «Обчислити» " +
+            "перемикає таблицю в режим значень.",
             "OK");
     }
 
@@ -291,6 +316,12 @@ public partial class MainPage : ContentPage
 
     private void AddRowButton_Clicked(object? sender, EventArgs e)
     {
+        if (rowCount >= MaximumRowCount)
+        {
+            StatusLabel.Text = $"Максимальна кількість рядків: {MaximumRowCount}";
+            return;
+        }
+
         SaveVisibleEntries();
         ModeSwitch.IsToggled = false;
         rowCount++;
@@ -321,6 +352,12 @@ public partial class MainPage : ContentPage
 
     private void AddColumnButton_Clicked(object? sender, EventArgs e)
     {
+        if (columnCount >= MaximumColumnCount)
+        {
+            StatusLabel.Text = $"Максимальна кількість стовпчиків: {MaximumColumnCount}";
+            return;
+        }
+
         SaveVisibleEntries();
         ModeSwitch.IsToggled = false;
         columnCount++;
@@ -357,7 +394,7 @@ public partial class MainPage : ContentPage
             StoreAllEntries();
         }
 
-        if (e.Value && calculatedValues.Count == 0 && cells.Count > 0)
+        if (e.Value && calculatedValues.Count != cells.Count && cells.Count > 0)
         {
             try
             {
@@ -407,33 +444,19 @@ public partial class MainPage : ContentPage
 
         try
         {
-            var input = new AntlrInputStream(expression);
-            var lexer = new ExpressionLexer(input);
-            var lexerErrorListener = new LexerErrorListener();
-            lexer.RemoveErrorListeners();
-            lexer.AddErrorListener(lexerErrorListener);
-
-            var tokens = new CommonTokenStream(lexer);
-            var parser = new ExpressionParser(tokens);
-            var parserErrorListener = new SyntaxErrorListener();
-            parser.RemoveErrorListeners();
-            parser.AddErrorListener(parserErrorListener);
-            var tree = parser.compileUnit();
-
-            string? errorMessage = lexerErrorListener.ErrorMessage ?? parserErrorListener.ErrorMessage;
-            if (errorMessage is not null)
-            {
-                throw new Exception(errorMessage);
-            }
-
-            var visitor = new EvaluatorVisitor(cell => EvaluateCell(cell, calculationPath));
-            object result = visitor.Visit(tree);
+            object result = ExpressionEvaluator.Evaluate(
+                expression,
+                cell => EvaluateCell(cell, calculationPath));
             calculatedValues[address] = result;
             return result;
         }
+        catch (CellEvaluationException)
+        {
+            throw;
+        }
         catch (Exception exception)
         {
-            throw new Exception($"Клітинка {address}: {exception.Message}");
+            throw new CellEvaluationException(address, exception.Message);
         }
         finally
         {
@@ -510,5 +533,57 @@ public partial class MainPage : ContentPage
         return Path.Combine(FileSystem.AppDataDirectory, "spreadsheet.json");
     }
 
+    private bool IsAddressVisible(string address)
+    {
+        if (!TryParseAddress(address, out int row, out int column))
+        {
+            return false;
+        }
+
+        return row >= 1 && row <= rowCount && column >= 1 && column <= columnCount;
+    }
+
+    private static bool TryParseAddress(string address, out int row, out int column)
+    {
+        row = 0;
+        column = 0;
+        int index = 0;
+
+        while (index < address.Length && char.IsLetter(address[index]))
+        {
+            char letter = char.ToUpperInvariant(address[index]);
+            if (letter < 'A' || letter > 'Z')
+            {
+                return false;
+            }
+
+            column = column * 26 + letter - 'A' + 1;
+            index++;
+        }
+
+        if (index == 0 || index == address.Length || address[index] == '0')
+        {
+            return false;
+        }
+
+        return int.TryParse(address[index..], out row);
+    }
+
+    private void UpdateStructureButtons()
+    {
+        RemoveRowButton.IsEnabled = rowCount > 1;
+        AddRowButton.IsEnabled = rowCount < MaximumRowCount;
+        RemoveColumnButton.IsEnabled = columnCount > 1;
+        AddColumnButton.IsEnabled = columnCount < MaximumColumnCount;
+    }
+
     private sealed record SheetData(int Rows, int Columns, Dictionary<string, string> Cells);
+
+    private sealed class CellEvaluationException : Exception
+    {
+        public CellEvaluationException(string address, string message)
+            : base($"Клітинка {address}: {message}")
+        {
+        }
+    }
 }
