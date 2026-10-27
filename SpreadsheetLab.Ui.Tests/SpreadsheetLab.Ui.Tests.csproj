@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net7.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.7.2" />
+    <PackageReference Include="MSTest.TestAdapter" Version="3.1.1" />
+    <PackageReference Include="MSTest.TestFramework" Version="3.1.1" />
+    <PackageReference Include="Antlr4.Runtime.Standard" Version="4.13.1" />
+    <PackageReference Include="Antlr4BuildTasks" Version="12.5.0" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\SpreadsheetLab.Ui\Parsing\EvaluatorVisitor.cs" Link="Parsing\EvaluatorVisitor.cs" />
+    <Compile Include="..\SpreadsheetLab.Ui\Parsing\ExpressionEvaluator.cs" Link="Parsing\ExpressionEvaluator.cs" />
+    <Antlr4 Include="..\SpreadsheetLab.Ui\Parsing\Expression.g4">
+      <Generator>MSBuild:Compile</Generator>
+      <Package>SpreadsheetLab.Ui.Parsing</Package>
+      <AntlrToolJar Condition="Exists('$(MSBuildProjectDirectory)/../SpreadsheetLab.Ui/obj/antlr-tool/antlr4-4.13.1-complete.jar')">$(MSBuildProjectDirectory)/../SpreadsheetLab.Ui/obj/antlr-tool/antlr4-4.13.1-complete.jar</AntlrToolJar>
+      <AntlrToolJarDownloadDir>$(MSBuildProjectDirectory)/obj/antlr-tool/</AntlrToolJarDownloadDir>
+      <Listener>false</Listener>
+      <Visitor>true</Visitor>
+    </Antlr4>
+  </ItemGroup>
+
+</Project>
