@@ -35,7 +35,7 @@ public class UnitTests
             "=not (A1 < A2) or A2 > A3 and A1 = A1",
             address => address == "A1" ? new BigInteger(10) : new BigInteger(20));
 
-        Assert.AreEqual(true, result);
+        Assert.AreEqual(false, result);
     }
 
     // Тест 3: перевірка повторного обчислення виразу після зміни значення клітинки.
