@@ -1,3 +1,4 @@
+using CommunityToolkit.Maui.Storage;
 using SpreadsheetLab.Ui.Parsing;
 using System.Numerics;
 using System.Text.Json;
@@ -22,11 +23,35 @@ public partial class MainPage : ContentPage
     private int rowCount = DefaultRowCount;
     private int columnCount = DefaultColumnCount;
     private string activeCell = "A1";
+    private bool restoredLastTable;
 
     public MainPage()
     {
         InitializeComponent();
         CreateGrid();
+        Loaded += MainPage_Loaded;
+    }
+
+    private async void MainPage_Loaded(object? sender, EventArgs e)
+    {
+        if (restoredLastTable)
+        {
+            return;
+        }
+
+        restoredLastTable = true;
+        string? path = Preferences.Default.Get<string?>("lastSpreadsheetPath", null);
+        if (!string.IsNullOrWhiteSpace(path) && File.Exists(path))
+        {
+            try
+            {
+                await LoadTableAsync(path, false);
+            }
+            catch
+            {
+                Preferences.Default.Remove("lastSpreadsheetPath");
+            }
+        }
     }
 
     private void CreateGrid()
@@ -220,9 +245,18 @@ public partial class MainPage : ContentPage
                 columnCount,
                 new Dictionary<string, string>(cells, StringComparer.OrdinalIgnoreCase));
             string json = JsonSerializer.Serialize(data, new JsonSerializerOptions { WriteIndented = true });
-            await File.WriteAllTextAsync(GetSavePath(), json);
+
+            using var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(json));
+            FileSaverResult result = await FileSaver.Default.SaveAsync("table.json", stream, CancellationToken.None);
+            if (!result.IsSuccessful || string.IsNullOrWhiteSpace(result.FilePath))
+            {
+                StatusLabel.Text = "Збереження скасовано";
+                return;
+            }
+
+            Preferences.Default.Set("lastSpreadsheetPath", result.FilePath);
             StatusLabel.Text = "Таблицю збережено";
-            await DisplayAlert("Збереження", "Таблицю збережено у локальному сховищі програми.", "OK");
+            await DisplayAlert("Збереження", $"Таблицю збережено у файл:\n{result.FilePath}", "OK");
         }
         catch (Exception exception)
         {
@@ -232,43 +266,61 @@ public partial class MainPage : ContentPage
 
     private async void OpenButton_Clicked(object? sender, EventArgs e)
     {
-        string path = GetSavePath();
-        if (!File.Exists(path))
-        {
-            await DisplayAlert("Відкриття", "Збереженої таблиці ще немає.", "OK");
-            return;
-        }
-
         try
         {
-            string json = await File.ReadAllTextAsync(path);
-            SheetData? data = JsonSerializer.Deserialize<SheetData>(json);
-            if (data is null || data.Cells is null)
+            FileResult? file = await FilePicker.Default.PickAsync(new PickOptions
             {
-                throw new JsonException();
-            }
-
-            ModeSwitch.IsToggled = false;
-            rowCount = Math.Clamp(data.Rows, 1, MaximumRowCount);
-            columnCount = Math.Clamp(data.Columns, 1, MaximumColumnCount);
-            cells.Clear();
-            calculatedValues.Clear();
-            foreach (var item in data.Cells)
-            {
-                string address = item.Key.ToUpperInvariant();
-                if (IsAddressVisible(address) && !string.IsNullOrWhiteSpace(item.Value))
+                PickerTitle = "Відкрити таблицю",
+                FileTypes = new FilePickerFileType(new Dictionary<DevicePlatform, IEnumerable<string>>
                 {
-                    cells[address] = item.Value.Trim();
-                }
-            }
+                    [DevicePlatform.MacCatalyst] = new[] { "public.json" },
+                    [DevicePlatform.WinUI] = new[] { ".json" },
+                    [DevicePlatform.Android] = new[] { "application/json" },
+                    [DevicePlatform.iOS] = new[] { "public.json" }
+                })
+            });
 
-            activeCell = "A1";
-            CreateGrid();
-            StatusLabel.Text = "Таблицю відкрито";
+            if (file is not null)
+            {
+                Preferences.Default.Set("lastSpreadsheetPath", file.FullPath);
+                await LoadTableAsync(file.FullPath, true);
+            }
         }
-        catch (Exception)
+        catch (Exception exception)
         {
-            await DisplayAlert("Помилка", "Не вдалося прочитати збережену таблицю.", "OK");
+            await DisplayAlert("Помилка", "Не вдалося відкрити таблицю: " + exception.Message, "OK");
+        }
+    }
+
+    private async Task LoadTableAsync(string path, bool showMessage)
+    {
+        string json = await File.ReadAllTextAsync(path);
+        SheetData? data = JsonSerializer.Deserialize<SheetData>(json);
+        if (data is null || data.Cells is null)
+        {
+            throw new JsonException("Файл не містить коректної таблиці.");
+        }
+
+        ModeSwitch.IsToggled = false;
+        rowCount = Math.Clamp(data.Rows, 1, MaximumRowCount);
+        columnCount = Math.Clamp(data.Columns, 1, MaximumColumnCount);
+        cells.Clear();
+        calculatedValues.Clear();
+        foreach (var item in data.Cells)
+        {
+            string address = item.Key.ToUpperInvariant();
+            if (IsAddressVisible(address) && !string.IsNullOrWhiteSpace(item.Value))
+            {
+                cells[address] = item.Value.Trim();
+            }
+        }
+
+        activeCell = "A1";
+        CreateGrid();
+        StatusLabel.Text = "Таблицю відкрито";
+        if (showMessage)
+        {
+            await DisplayAlert("Відкриття", "Таблицю відкрито.", "OK");
         }
     }
 
@@ -526,11 +578,6 @@ public partial class MainPage : ContentPage
         }
 
         return name;
-    }
-
-    private static string GetSavePath()
-    {
-        return Path.Combine(FileSystem.AppDataDirectory, "spreadsheet.json");
     }
 
     private bool IsAddressVisible(string address)
